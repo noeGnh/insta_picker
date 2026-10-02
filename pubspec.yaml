@@ -1,6 +1,6 @@
 name: insta_picker
 description: Instagram Picker.
-version: 0.1.0
+version: 0.1.1
 homepage: https://github.com/mstrkn/InstaPicker.git
 publish_to: 'none'
 
@@ -29,8 +29,8 @@ dependencies:
 
   photofilters:
     git:
-      url: git@github.com:noeGnh/photofilters.git
-      ref: develop
+      url: https://github.com/noeGnh/photofilters.git
+      ref: f48c58ae91292d7a871e197ae34e1bb493ef6173
 
 dev_dependencies:
   flutter_test:

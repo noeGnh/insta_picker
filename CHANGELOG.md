@@ -1,3 +1,7 @@
+## 0.1.1
+
+* Pin photofilters over HTTPS to a fixed commit instead of SSH + `develop`, so that apps can resolve it together with story_picker.
+
 ## 0.1.0
 
 Stabilization release. The package is now in maintenance mode: bug fixes and dependency updates only.
