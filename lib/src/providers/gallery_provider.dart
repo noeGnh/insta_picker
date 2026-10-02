@@ -1,10 +1,4 @@
-import 'dart:io';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:get_thumbnail_video/index.dart';
-import 'package:get_thumbnail_video/video_thumbnail.dart';
 import 'package:insta_picker/insta_picker.dart';
 import 'package:insta_picker/src/models/file_model.dart';
 import 'package:insta_picker/src/models/folder_model.dart';
@@ -12,9 +6,6 @@ import 'package:insta_picker/src/utils/utils.dart';
 import 'package:insta_picker/src/widgets/preview/image_preview.dart';
 import 'package:insta_picker/src/widgets/preview/video_preview.dart';
 import 'package:logger/logger.dart';
-import 'package:path/path.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 class GalleryProvider extends ChangeNotifier {
@@ -28,8 +19,11 @@ class GalleryProvider extends ChangeNotifier {
   List<FileModel?> _files = [];
   List<FolderModel> _folders = [];
 
-  int _multiSelectLimit = 5;
+  int _multiSelectLimit = 1;
   bool _multiSelect = false;
+  bool _loadStarted = false;
+  bool _disposed = false;
+  int _selectionToken = 0;
 
   List<FileModel?> get files => this._files;
   List<FolderModel> get folders => this._folders;
@@ -37,7 +31,6 @@ class GalleryProvider extends ChangeNotifier {
   FolderModel? get selectedFolder => this._selectedFolder;
 
   bool get multiSelect => this._multiSelect;
-  // get multiSelectLimit => this._multiSelectLimit;
 
   set multiSelect(bool b) {
     this._files.clear();
@@ -45,8 +38,8 @@ class GalleryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  set multiSelectLimit(bool b) {
-    this._multiSelect = b;
+  set multiSelectLimit(int limit) {
+    this._multiSelectLimit = limit;
   }
 
   set selectedFile(FileModel? file) {
@@ -56,6 +49,17 @@ class GalleryProvider extends ChangeNotifier {
 
   set translations(Translations translations) {
     this._translations = translations;
+  }
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   getCheckNumber(FileModel? file) => this._files.indexOf(file) + 1;
@@ -72,7 +76,7 @@ class GalleryProvider extends ChangeNotifier {
       }
 
       if (this._files.length >= this._multiSelectLimit) {
-        logger.w('The limit is ${this._multiSelectLimit} images.');
+        Utils.showToast(this._translations.maxSelectionReached.replaceAll('{max}', '${this._multiSelectLimit}'));
         return;
       }
 
@@ -81,108 +85,54 @@ class GalleryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  getFilesPath() async {
-    if (!await Permission.storage.request().isGranted) return;
+  /// Selects [file] once its path is known, so that the preview can display it.
+  Future<void> selectFile(FileModel? file) async {
+    final int token = ++_selectionToken;
 
-    final String cacheDir = '${(await getTemporaryDirectory()).path}/galleryPicker';
-
-    PhotoManager.setIgnorePermissionCheck(true);
-
-    var permission = await PhotoManager.requestPermissionExtend();
-    if (permission.isAuth) {
-      var paths = await PhotoManager.getAssetPathList(
-          hasAll: false,
-          filterOption: FilterOptionGroup()
-            ..setOption(
-                AssetType.video,
-                FilterOption(
-                    durationConstraint: const DurationConstraint(
-                  max: Duration(minutes: VIDEO_LENGTH_LIMIT),
-                ))));
-
-      for (int i = 0; i < paths.length; i++) {
-        AssetPathEntity path = paths[i];
-
-        List<FileModel> fileList = [];
-        List<AssetEntity> assetList = await path.getAssetListRange(start: 0, end: 10000);
-
-        for (int y = 0; y < assetList.length; y++) {
-          File? file = await assetList[y].file;
-          File? thumbFile;
-
-          if (assetList[y].type == AssetType.image || assetList[y].type == AssetType.video) {
-            if (['.mp4', '.png', '.jpg', '.jpeg', '.gif'].contains(extension(file!.path).toLowerCase())) {
-              try {
-                String thumbName = (basename(file.path).split('.')[0] + path.id + (assetList[y].type == AssetType.video ? '.mp4' : '')).replaceAll(' ', '');
-                String thumbPath = '$cacheDir/$thumbName.jpg';
-
-                if (await File(thumbPath).exists()) {
-                  thumbFile = File(thumbPath);
-                } else {
-                  Uint8List? thumbBytes;
-
-                  if (assetList[y].type == AssetType.video) {
-                    thumbBytes = await VideoThumbnail.thumbnailData(
-                      video: file.path,
-                      imageFormat: ImageFormat.JPEG,
-                      maxWidth: 128,
-                      quality: 95,
-                    );
-                  } else {
-                    thumbBytes = await FlutterImageCompress.compressWithFile(
-                      file.path,
-                      minHeight: 144,
-                      minWidth: 144,
-                      quality: 95,
-                    );
-                  }
-
-                  thumbFile = await File(thumbPath).create(recursive: true);
-
-                  thumbFile = await thumbFile.writeAsBytes(thumbBytes!);
-                }
-              } catch (e) {
-                print(e);
-              }
-
-              if (thumbFile != null) {
-                fileList.add(FileModel(
-                    duration: assetList[y].videoDuration,
-                    type: assetList[y].type,
-                    size: assetList[y].size,
-                    width: assetList[y].width,
-                    height: assetList[y].height,
-                    createDt: assetList[y].createDateTime,
-                    modifiedDt: assetList[y].modifiedDateTime,
-                    latitude: assetList[y].latitude,
-                    longitude: assetList[y].longitude,
-                    title: assetList[y].title,
-                    relativePath: assetList[y].relativePath,
-                    filePath: file.path,
-                    thumbPath: thumbFile.path));
-              }
-            }
-          }
-        }
-
-        if (fileList.isNotEmpty) {
-          this._folders.add(FolderModel(files: fileList, name: path.name, id: path.id, type: path.albumType, count: await path.assetCountAsync));
-
-          if (this._folders.length == 1) {
-            this._selectedFolder = this._folders[0];
-            this._selectedFile = this._folders[0].files![0];
-          }
-        }
-
-        notifyListeners();
-      }
+    if (file != null && await file.resolveFilePath() == null) {
+      logger.w('Unable to get the file of asset ${file.asset?.id}');
+      return;
     }
+
+    if (token == _selectionToken) this.selectedFile = file;
   }
 
-  List<DropdownMenuItem> getItems() {
+  Future<void> getFilesPath() async {
+    if (_loadStarted) return;
+    _loadStarted = true;
+
+    final PermissionState permission = await PhotoManager.requestPermissionExtend();
+    if (!permission.hasAccess) {
+      logger.w('Gallery permission denied');
+      return;
+    }
+
+    final List<AssetPathEntity> paths = await PhotoManager.getAssetPathList(
+        type: RequestType.common,
+        filterOption: FilterOptionGroup()
+          ..setOption(
+              AssetType.video,
+              const FilterOption(
+                  durationConstraint: DurationConstraint(
+                max: Duration(minutes: VIDEO_LENGTH_LIMIT),
+              ))));
+
+    for (final AssetPathEntity path in paths) {
+      final int count = await path.assetCountAsync;
+      if (count == 0) continue;
+
+      this._folders.add(FolderModel(path: path, name: path.name, id: path.id, type: path.albumType, count: count));
+    }
+
+    if (this._folders.isNotEmpty) await onFolderSelected(this._folders[0]);
+
+    notifyListeners();
+  }
+
+  List<DropdownMenuItem<FolderModel>> getItems() {
     return this
         ._folders
-        .map((e) => DropdownMenuItem(
+        .map((e) => DropdownMenuItem<FolderModel>(
               child: SizedBox(
                 width: 190,
                 child: Text(
@@ -196,17 +146,23 @@ class GalleryProvider extends ChangeNotifier {
         .toList();
   }
 
-  void onFolderSelected(FolderModel folder, {int index = 0}) {
-    assert(folder.files!.length > 0);
-
-    this._selectedFile = folder.files![index];
-
+  Future<void> onFolderSelected(FolderModel folder, {int index = 0}) async {
     this._selectedFolder = folder;
+    notifyListeners();
+
+    if (folder.files == null) {
+      final List<AssetEntity> assets = await folder.path!.getAssetListRange(start: 0, end: folder.count ?? 0);
+      folder.files = assets.map((asset) => FileModel.fromAsset(asset)).toList();
+    }
+
+    if (this._selectedFolder != folder) return;
 
     notifyListeners();
+
+    if (folder.files!.length > index) await selectFile(folder.files![index]);
   }
 
-  void submit(BuildContext context, Options? options) async {
+  void submit(BuildContext context, Options options) async {
     if (this._multiSelect) {
       this._returnImageResult(context, options);
     } else {
@@ -218,13 +174,13 @@ class GalleryProvider extends ChangeNotifier {
           if (this._selectedFile!.duration != null && this._selectedFile!.duration!.inMinutes <= VIDEO_LENGTH_LIMIT) {
             InstaPickerResult? result = await Navigator.of(context).push(MaterialPageRoute(
                 builder: (ctx) => VideoPreview(
-                      files: this._files,
+                      files: this._files.map((file) => file!.copy()).toList(),
                       imagePreviewOptions: options,
                     )));
 
-            if (result != null) Navigator.pop(context, result);
+            if (result != null && context.mounted) Navigator.pop(context, result);
           } else {
-            logger.w('Too long video !');
+            Utils.showToast(this._translations.videoTooLong);
           }
         } else {
           this._returnImageResult(context, options);
@@ -235,16 +191,26 @@ class GalleryProvider extends ChangeNotifier {
     }
   }
 
-  void _returnImageResult(BuildContext context, Options? options) async {
-    this.selectedFile = this._files[0];
+  void _returnImageResult(BuildContext context, Options options) async {
+    if (this._files.isEmpty) return;
+
+    for (final FileModel? file in this._files) {
+      if (await file!.resolveFilePath() == null) {
+        logger.w('Unable to get the file of asset ${file.asset?.id}');
+        return;
+      }
+    }
+
+    if (!context.mounted) return;
 
     InstaPickerResult? result = await Navigator.of(context).push(MaterialPageRoute(
         builder: (ctx) => ImagePreview(
-              files: this._files,
+              // Copies, so that the edits made in the preview do not alter the gallery files.
+              files: this._files.map((file) => file!.copy()).toList(),
               imagePreviewOptions: options,
-              showAddButton: options!.customizationOptions.galleryCustomization.maxSelectable > 1,
+              showAddButton: options.customizationOptions.galleryCustomization.maxSelectable > 1,
             )));
 
-    if (result != null) Navigator.pop(context, result);
+    if (result != null && context.mounted) Navigator.pop(context, result);
   }
 }

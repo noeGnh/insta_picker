@@ -45,9 +45,25 @@ class VideoPreviewProvider extends ChangeNotifier {
 
   List<FileModel?>? files;
 
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    // The trimmer and its video player are released by the video_trimmer widgets.
+    _disposed = true;
+    super.dispose();
+  }
+
   loadVideoTrimmer() async => await _trimmer.loadVideo(videoFile: File(files![0]!.filePath!));
 
   submit(BuildContext context) async {
+    if (this._progressVisibility) return;
+
     this.progressVisibility = true;
 
     this._trimmer.saveTrimmedVideo(
@@ -56,15 +72,9 @@ class VideoPreviewProvider extends ChangeNotifier {
           onSave: (String? outputPath) {
             this.progressVisibility = false;
 
-            List<PickedFile> pickedFiles = [];
+            if (outputPath == null || !context.mounted) return;
 
-            if (files != null) {
-              files!.map((file) {
-                pickedFiles.add(PickedFile(path: outputPath, name: basename(outputPath!)));
-              }).toList();
-
-              Navigator.pop(context, InstaPickerResult(pickedFiles: pickedFiles, resultType: ResultType.VIDEO));
-            }
+            Navigator.pop(context, InstaPickerResult(pickedFiles: [PickedFile(path: outputPath, name: basename(outputPath))], resultType: ResultType.VIDEO));
           },
         );
   }

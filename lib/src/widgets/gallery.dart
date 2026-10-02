@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:chewie/chewie.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +8,6 @@ import 'package:insta_picker/src/models/folder_model.dart';
 import 'package:insta_picker/src/models/options.dart';
 import 'package:insta_picker/src/providers/gallery_provider.dart';
 import 'package:insta_picker/src/utils/utils.dart';
-import 'package:path/path.dart' as path;
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:provider/provider.dart';
@@ -41,14 +41,10 @@ class _GalleryViewState extends State<GalleryView> with AutomaticKeepAliveClient
     super.initState();
 
     galleryProvider = Provider.of<GalleryProvider>(context, listen: false);
-    galleryProvider.getFilesPath();
-
     galleryProvider.translations = options!.translations;
-  }
+    galleryProvider.multiSelectLimit = options!.customizationOptions.galleryCustomization.maxSelectable;
 
-  @override
-  void dispose() {
-    super.dispose();
+    galleryProvider.getFilesPath();
   }
 
   @override
@@ -61,7 +57,7 @@ class _GalleryViewState extends State<GalleryView> with AutomaticKeepAliveClient
         title: Consumer<GalleryProvider>(builder: (ctx, provider, child) {
           return DropdownButtonHideUnderline(
               child: DropdownButton<FolderModel>(
-            items: provider.getItems() as List<DropdownMenuItem<FolderModel>>?,
+            items: provider.getItems(),
             onChanged: (FolderModel? folder) => provider.onFolderSelected(folder!),
             value: provider.selectedFolder,
           ));
@@ -85,7 +81,7 @@ class _GalleryViewState extends State<GalleryView> with AutomaticKeepAliveClient
               ),
             ),
             onTap: () {
-              galleryProvider.submit(context, options);
+              galleryProvider.submit(context, options!);
             },
           )
         ],
@@ -104,7 +100,7 @@ class _GalleryViewState extends State<GalleryView> with AutomaticKeepAliveClient
                       color: options!.customizationOptions.bgColor,
                       child: Stack(
                         children: [
-                          provider.selectedFile!.type == AssetType.image ? GalleryImagePreview(provider) : GalleryVideoPreview(provider, Key(path.basename(provider.selectedFile!.filePath!))),
+                          provider.selectedFile!.type == AssetType.image ? GalleryImagePreview(provider) : GalleryVideoPreview(provider, Key(provider.selectedFile!.asset?.id ?? provider.selectedFile!.filePath!)),
                           options!.customizationOptions.galleryCustomization.maxSelectable > 1
                               ? Positioned(
                                   right: 20,
@@ -136,7 +132,7 @@ class _GalleryViewState extends State<GalleryView> with AutomaticKeepAliveClient
           ),
           Divider(),
           Consumer<GalleryProvider>(builder: (ctx, provider, child) {
-            return provider.selectedFolder != null && provider.selectedFolder!.files!.length > 0
+            return provider.selectedFolder?.files?.isNotEmpty == true
                 ? Container(
                     color: options!.customizationOptions.bgColor,
                     height: MediaQuery.of(context).size.height * 0.42,
@@ -186,7 +182,8 @@ class GalleryVideoPreview extends StatefulWidget {
 
 class _GalleryVideoPreviewState extends State<GalleryVideoPreview> {
   Future<bool>? _init;
-  late ChewieController _chewieController;
+  ChewieController? _chewieController;
+  bool _disposed = false;
   late VideoPlayerController _videoPlayerController;
 
   @override
@@ -201,6 +198,8 @@ class _GalleryVideoPreviewState extends State<GalleryVideoPreview> {
   Future<bool> initVideoPlayer() async {
     await _videoPlayerController.initialize();
 
+    if (_disposed) return false;
+
     _chewieController = ChewieController(
       videoPlayerController: _videoPlayerController,
       allowFullScreen: false,
@@ -214,8 +213,9 @@ class _GalleryVideoPreviewState extends State<GalleryVideoPreview> {
 
   @override
   void dispose() {
+    _disposed = true;
+    _chewieController?.dispose();
     _videoPlayerController.dispose();
-    _chewieController.dispose();
     super.dispose();
   }
 
@@ -229,12 +229,15 @@ class _GalleryVideoPreviewState extends State<GalleryVideoPreview> {
           return VisibilityDetector(
               key: widget.key,
               onVisibilityChanged: (VisibilityInfo info) {
+                // The callback can be called after the preview is disposed.
+                if (_disposed) return;
+
                 if (info.visibleFraction == 0)
-                  _chewieController.pause();
+                  _chewieController!.pause();
                 else
-                  _chewieController.play();
+                  _chewieController!.play();
               },
-              child: Chewie(controller: _chewieController));
+              child: Chewie(controller: _chewieController!));
         });
   }
 }
@@ -249,35 +252,39 @@ class GalleryItem extends StatefulWidget {
   _GalleryItemState createState() => _GalleryItemState();
 }
 
-class _GalleryItemState extends State<GalleryItem> with AutomaticKeepAliveClientMixin {
+class _GalleryItemState extends State<GalleryItem> {
+  Future<Uint8List?>? _thumbnail;
+
   @override
   void initState() {
     super.initState();
+
+    _thumbnail = widget.file?.asset?.thumbnailDataWithSize(const ThumbnailSize.square(200));
   }
 
   @override
-  void dispose() {
-    super.dispose();
-  }
+  void didUpdateWidget(GalleryItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
 
-  @override
-  bool get wantKeepAlive => true;
+    if (oldWidget.file != widget.file) _thumbnail = widget.file?.asset?.thumbnailDataWithSize(const ThumbnailSize.square(200));
+  }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-
     return widget.file != null
         ? Stack(
             fit: StackFit.expand,
             children: [
               GestureDetector(
-                child: Image.file(
-                  File(widget.file!.thumbPath!),
-                  fit: BoxFit.cover,
-                ),
+                child: FutureBuilder<Uint8List?>(
+                    future: _thumbnail,
+                    builder: (ctx, snp) {
+                      if (snp.data == null) return Container(color: options!.customizationOptions.galleryCustomization.gridBgColor);
+
+                      return Image.memory(snp.data!, fit: BoxFit.cover, gaplessPlayback: true);
+                    }),
                 onTap: () {
-                  widget.provider!.selectedFile = widget.file;
+                  widget.provider!.selectFile(widget.file);
                   if (widget.provider!.multiSelect) widget.provider!.toggleCheckState(widget.file);
                 },
                 onLongPress: () {
@@ -285,7 +292,7 @@ class _GalleryItemState extends State<GalleryItem> with AutomaticKeepAliveClient
 
                   widget.provider!.multiSelect = !widget.provider!.multiSelect;
                   widget.provider!.toggleCheckState(widget.file);
-                  widget.provider!.selectedFile = widget.file;
+                  widget.provider!.selectFile(widget.file);
                 },
               ),
               widget.provider!.multiSelect
@@ -307,7 +314,7 @@ class _GalleryItemState extends State<GalleryItem> with AutomaticKeepAliveClient
                         ),
                         onTap: () {
                           widget.provider!.toggleCheckState(widget.file);
-                          widget.provider!.selectedFile = widget.file;
+                          widget.provider!.selectFile(widget.file);
                         },
                       ))
                   : Container(),

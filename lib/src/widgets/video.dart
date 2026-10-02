@@ -32,19 +32,9 @@ class _VideoViewState extends State<VideoView> with AutomaticKeepAliveClientMixi
     super.initState();
 
     provider = Provider.of<VideoProvider>(context, listen: false);
-    // provider.getAvailableCameras(mounted);
 
     provider.translations = options!.translations;
     provider.durationLimit = options!.customizationOptions.videoCustomization.maximumRecordingDuration.inSeconds;
-  }
-
-  @override
-  void dispose() {
-    if (provider.controller != null) {
-      provider.controller!.dispose();
-      provider.cancelTimer();
-    }
-    super.dispose();
   }
 
   @override
@@ -79,7 +69,7 @@ class _VideoViewState extends State<VideoView> with AutomaticKeepAliveClientMixi
             Row(
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                CameraTogglesRowWidget(mounted),
+                CameraTogglesRowWidget(),
                 CaptureControlRowWidget(),
                 FlashToggleRowWidget(),
               ],
@@ -136,9 +126,6 @@ class CaptureControlRowWidget extends StatelessWidget {
 }
 
 class CameraTogglesRowWidget extends StatelessWidget {
-  final bool mounted;
-
-  CameraTogglesRowWidget(this.mounted);
 
   IconData _getCameraLensIcon(CameraLensDirection direction) {
     switch (direction) {
@@ -148,8 +135,6 @@ class CameraTogglesRowWidget extends StatelessWidget {
         return Icons.camera_front;
       case CameraLensDirection.external:
         return Icons.camera;
-      default:
-        return Icons.device_unknown;
     }
   }
 
@@ -175,7 +160,7 @@ class CameraTogglesRowWidget extends StatelessWidget {
               ),
             ),
             onTap: () {
-              videoProvider.onSwitchCamera(mounted);
+              videoProvider.onSwitchCamera();
             },
           )),
     );
@@ -247,8 +232,8 @@ class _VideoCaptureButtonState extends State<VideoCaptureButton> {
       preferredDirection: AxisDirection.up,
       controller: tooltipController,
       child: GestureDetector(
-        onLongPressStart: (d) => widget.videoProvider.startVideoRecording(context, mounted),
-        onLongPressEnd: (d) => widget.videoProvider.stopVideoRecording(context, mounted),
+        onLongPressStart: (d) => widget.videoProvider.startVideoRecording(context),
+        onLongPressEnd: (d) => widget.videoProvider.stopVideoRecording(context),
         child: FloatingActionButton(
           heroTag: null,
           child: Icon(
