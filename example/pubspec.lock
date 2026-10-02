@@ -302,7 +302,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "0.1.0"
+    version: "0.1.1"
   intl:
     dependency: transitive
     description:
@@ -539,9 +539,9 @@ packages:
     dependency: transitive
     description:
       path: "."
-      ref: develop
-      resolved-ref: "27b297c9c6b411b05d9f580a092055f1f81b4c4d"
-      url: "git@github.com:noeGnh/photofilters.git"
+      ref: f48c58ae91292d7a871e197ae34e1bb493ef6173
+      resolved-ref: f48c58ae91292d7a871e197ae34e1bb493ef6173
+      url: "https://github.com/noeGnh/photofilters.git"
     source: git
     version: "3.0.3"
   platform:
