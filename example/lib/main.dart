@@ -43,7 +43,10 @@ class _ContentState extends State<Content> {
           ),
           ElevatedButton(
             onPressed: () async {
-              InstaPickerResult? result = await InstaPicker.pick(context, options: Options());
+              InstaPickerResult? result = await InstaPicker.pick(
+                context,
+                options: Options(customizationOptions: CustomizationOptions(galleryCustomization: GalleryCustomization(maxSelectable: 3))),
+              );
               if (result != null) {
                 mediaPath = result.pickedFiles![0].path;
                 mediaType = result.resultType;
