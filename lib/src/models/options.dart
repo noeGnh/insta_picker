@@ -83,6 +83,8 @@ class Translations {
   String whatDoYouWantToDo;
   String delete;
   String validate;
+  String maxSelectionReached;
+  String videoTooLong;
 
   Translations(
       {this.galleryTabTitle = 'Gallery',
@@ -97,5 +99,7 @@ class Translations {
       this.recordedVideo = 'Recorded Video',
       this.whatDoYouWantToDo = 'What do you want to do ?',
       this.delete = 'Delete',
-      this.validate = 'Validate'});
+      this.validate = 'Validate',
+      this.maxSelectionReached = 'You can select up to {max} items',
+      this.videoTooLong = 'This video is too long'});
 }

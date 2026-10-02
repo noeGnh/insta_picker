@@ -41,6 +41,7 @@ class _ImagePreviewContentState extends State<ImagePreviewContent> {
   Widget _getItemCard(int index) {
     return Card(
       child: Stack(
+        fit: StackFit.expand,
         children: [
           Image.file(
             File(_imagePreviewProvider.files!.elementAt(index)!.filePath!),
@@ -178,7 +179,7 @@ class _ImagePreviewContentState extends State<ImagePreviewContent> {
                           alignment: Alignment.center,
                           child: _getItemCard(i),
                         )
-                      : _getItemCard(i);
+                      : SizedBox(width: MediaQuery.of(context).size.width * 0.85, child: _getItemCard(i));
                 });
           })),
     );

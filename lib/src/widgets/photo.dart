@@ -31,13 +31,6 @@ class _PhotoViewState extends State<PhotoView> with AutomaticKeepAliveClientMixi
     super.initState();
 
     photoProvider = Provider.of<PhotoProvider>(context, listen: false);
-    // photoProvider.getAvailableCameras(mounted);
-  }
-
-  @override
-  void dispose() {
-    if (photoProvider.controller != null) photoProvider.controller!.dispose();
-    super.dispose();
   }
 
   @override
@@ -58,7 +51,7 @@ class _PhotoViewState extends State<PhotoView> with AutomaticKeepAliveClientMixi
             Row(
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                CameraTogglesRowWidget(mounted),
+                CameraTogglesRowWidget(),
                 CaptureControlRowWidget(),
                 FlashToggleRowWidget(),
               ],
@@ -116,7 +109,7 @@ class CaptureControlRowWidget extends StatelessWidget {
                 ),
                 backgroundColor: options!.customizationOptions.iconsColor,
                 onPressed: () {
-                  photoProvider.onCapturePressed(context, options);
+                  photoProvider.onCapturePressed(context, options!);
                 })
           ],
         ),
@@ -126,9 +119,6 @@ class CaptureControlRowWidget extends StatelessWidget {
 }
 
 class CameraTogglesRowWidget extends StatelessWidget {
-  final bool mounted;
-
-  CameraTogglesRowWidget(this.mounted);
 
   IconData _getCameraLensIcon(CameraLensDirection direction) {
     switch (direction) {
@@ -138,8 +128,6 @@ class CameraTogglesRowWidget extends StatelessWidget {
         return Icons.camera_front;
       case CameraLensDirection.external:
         return Icons.camera;
-      default:
-        return Icons.device_unknown;
     }
   }
 
@@ -165,7 +153,7 @@ class CameraTogglesRowWidget extends StatelessWidget {
               ),
             ),
             onTap: () {
-              photoProvider.onSwitchCamera(mounted);
+              photoProvider.onSwitchCamera();
             },
           )),
     );

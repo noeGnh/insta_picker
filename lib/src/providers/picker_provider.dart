@@ -9,18 +9,37 @@ class PickerProvider extends ChangeNotifier {
 
   bool pageIsChanging = false;
 
+  int currentIndex = 0;
+
   void init(BuildContext context, Map<String, int> indexes) {
-    if (indexes['PHOTO_PAGE_INDEX'] == 0) {
-      PhotoProvider photoProvider = Provider.of<PhotoProvider>(context, listen: false);
-      photoProvider.getAvailableCameras(true);
-    } else if (indexes['VIDEO_PAGE_INDEX'] == 0) {
-      VideoProvider videoProvider = Provider.of<VideoProvider>(context, listen: false);
-      videoProvider.getAvailableCameras(true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) activateCamera(context, 0, indexes);
+    });
+  }
+
+  /// Opens the camera of the tab at [index] (if it has one) and releases the camera of the other tab.
+  void activateCamera(BuildContext context, int index, Map<String, int> indexes) {
+    PhotoProvider photoProvider = Provider.of<PhotoProvider>(context, listen: false);
+    VideoProvider videoProvider = Provider.of<VideoProvider>(context, listen: false);
+
+    if (index == indexes['PHOTO_PAGE_INDEX']) {
+      videoProvider.disposeCamera().then((_) => photoProvider.getAvailableCameras());
+    } else if (index == indexes['VIDEO_PAGE_INDEX']) {
+      photoProvider.disposeCamera().then((_) => videoProvider.getAvailableCameras());
+    } else {
+      releaseCameras(context);
     }
+  }
+
+  void releaseCameras(BuildContext context) {
+    Provider.of<PhotoProvider>(context, listen: false).disposeCamera();
+    Provider.of<VideoProvider>(context, listen: false).disposeCamera();
   }
 
   void onPageChange(BuildContext context, int index, Map<String, int> indexes) async {
     if (tabController == null || pageController == null || pageIsChanging) return;
+
+    currentIndex = index;
 
     await pageController!.animateToPage(index, duration: Duration(milliseconds: 500), curve: Curves.ease);
 
@@ -28,12 +47,6 @@ class PickerProvider extends ChangeNotifier {
 
     pageIsChanging = false;
 
-    if (index == indexes['PHOTO_PAGE_INDEX']) {
-      PhotoProvider photoProvider = Provider.of<PhotoProvider>(context, listen: false);
-      photoProvider.getAvailableCameras(true);
-    } else if (index == indexes['VIDEO_PAGE_INDEX']) {
-      VideoProvider videoProvider = Provider.of<VideoProvider>(context, listen: false);
-      videoProvider.getAvailableCameras(true);
-    }
+    if (context.mounted) activateCamera(context, index, indexes);
   }
 }

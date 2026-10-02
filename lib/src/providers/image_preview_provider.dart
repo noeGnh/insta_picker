@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:insta_picker/src/models/file_model.dart';
@@ -9,6 +10,18 @@ import 'package:path/path.dart';
 import 'package:photofilters/filters/preset_filters.dart';
 import 'package:photofilters/widgets/photo_filter.dart';
 import 'package:image/image.dart' as imageLib;
+
+/// Width of the images given to the filters: photofilters processes the whole image for each filter.
+const int _FILTER_IMAGE_WIDTH = 1080;
+
+/// Decodes the image at [filePath] in its displayed orientation, at most [_FILTER_IMAGE_WIDTH] wide.
+imageLib.Image? _decodeImageForFilters(String filePath) {
+  final imageLib.Image? decoded = imageLib.decodeImage(File(filePath).readAsBytesSync());
+  if (decoded == null) return null;
+
+  final imageLib.Image oriented = imageLib.bakeOrientation(decoded);
+  return oriented.width > _FILTER_IMAGE_WIDTH ? imageLib.copyResize(oriented, width: _FILTER_IMAGE_WIDTH) : oriented;
+}
 
 class ImagePreviewProvider extends ChangeNotifier {
   List<FileModel?>? files = [];
@@ -28,9 +41,9 @@ class ImagePreviewProvider extends ChangeNotifier {
   }
 
   addFilter(BuildContext context, FileModel file, Options? options) async {
-    File f = File(file.filePath!);
-    var image = imageLib.decodeImage(f.readAsBytesSync())!;
-    image = imageLib.copyResize(image, width: 600);
+    final imageLib.Image? image = await compute(_decodeImageForFilters, file.filePath!);
+
+    if (image == null || !context.mounted) return;
 
     Map? filterResult = await Navigator.push(
       context,

@@ -2,115 +2,38 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:insta_picker/insta_picker.dart';
 import 'package:insta_picker/src/models/file_model.dart';
-import 'package:insta_picker/src/models/result.dart';
+import 'package:insta_picker/src/providers/camera_provider.dart';
 import 'package:insta_picker/src/widgets/preview/image_preview.dart';
-import 'package:logger/logger.dart';
 import 'package:path/path.dart';
 
-class PhotoProvider extends ChangeNotifier {
-  final Logger logger = Logger();
+class PhotoProvider extends CameraProvider {
+  bool _capturing = false;
 
-  CameraController? controller;
-  late int selectedCameraIdx;
-  String? imagePath;
-  List? cameras;
+  @override
+  List<FlashMode> get flashModes => const [FlashMode.off, FlashMode.always, FlashMode.auto];
 
-  FlashMode flashMode = FlashMode.off;
+  void onCapturePressed(BuildContext context, Options options) async {
+    if (_capturing || controller == null || !controller!.value.isInitialized || controller!.value.isTakingPicture) return;
 
-  Future<void> onFlashButtonPressed() async {
-    switch (flashMode) {
-      case FlashMode.torch:
-        flashMode = FlashMode.auto;
-        break;
-
-      case FlashMode.off:
-        flashMode = FlashMode.torch;
-        break;
-
-      default:
-        flashMode = FlashMode.off;
-    }
-
-    await controller!.setFlashMode(flashMode);
-
-    notifyListeners();
-  }
-
-  void getAvailableCameras(bool mounted) {
-    availableCameras().then((availableCameras) {
-      cameras = availableCameras;
-      if (cameras!.length > 0) {
-        selectedCameraIdx = 0;
-
-        notifyListeners();
-
-        _initCameraController(cameras![selectedCameraIdx], mounted).then((void v) {});
-      } else {
-        logger.w("No camera available");
-      }
-    }).catchError((e) {
-      logger.e('Error: ${e.code}\nError Message: $e.message');
-    });
-  }
-
-  Future _initCameraController(CameraDescription cameraDescription, bool mounted) async {
-    if (controller != null) {
-      await controller!.dispose();
-    }
-
-    controller = CameraController(cameraDescription, ResolutionPreset.high);
-
-    controller!.addListener(() {
-      if (mounted) {
-        notifyListeners();
-      }
-
-      if (controller!.value.hasError) {
-        logger.e('Camera error ${controller!.value.errorDescription}');
-      }
-    });
+    _capturing = true;
 
     try {
-      await controller!.initialize();
-    } on CameraException catch (e) {
-      logger.e(e);
-    }
+      final XFile file = await controller!.takePicture();
 
-    if (mounted) {
-      notifyListeners();
-    }
-  }
-
-  void refreshCamera(bool mounted) {
-    Future.delayed(Duration(milliseconds: 1000), () async {
-      _initCameraController(cameras![0], mounted);
-    });
-  }
-
-  void onSwitchCamera(bool mounted) {
-    selectedCameraIdx = selectedCameraIdx < cameras!.length - 1 ? selectedCameraIdx + 1 : 0;
-    CameraDescription selectedCamera = cameras![selectedCameraIdx];
-    _initCameraController(selectedCamera, mounted);
-  }
-
-  void onCapturePressed(context, options) async {
-    try {
-      String? path;
-
-      await controller!.takePicture().then((XFile file) {
-        path = file.path;
-      });
+      if (!context.mounted) return;
 
       InstaPickerResult? result = await Navigator.of(context).push(MaterialPageRoute(
           builder: (ctx) => ImagePreview(
-                files: [FileModel(filePath: path, title: basename(path!))],
+                files: [FileModel(filePath: file.path, title: basename(file.path))],
                 imagePreviewOptions: options,
                 showAddButton: false,
               )));
 
-      if (result != null) Navigator.pop(context, result);
+      if (result != null && context.mounted) Navigator.pop(context, result);
     } catch (e) {
       logger.e(e);
+    } finally {
+      _capturing = false;
     }
   }
 }
